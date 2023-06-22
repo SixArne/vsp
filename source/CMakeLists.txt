@@ -25,7 +25,7 @@ target_link_libraries(vsp PUBLIC
 )
 
 # Adding include directories for library users
-set(vsp_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR} PARENT_SCOPE)
+set(vsp_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vsp")
 
 
 ################################################################################################
@@ -55,3 +55,6 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(glslang)
 
 find_package(Vulkan REQUIRED)
+
+# Export vsp_INCLUDE_DIR to parent scope
+set(vsp_INCLUDE_DIR "${vsp_INCLUDE_DIR}" CACHE INTERNAL "vsp include directory")
