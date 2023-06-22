@@ -43,6 +43,8 @@ elseif (CMAKE_BUILD_TYPE STREQUAL "Release")
     target_compile_definitions(vsp PUBLIC DEBUG=0)
 endif()
 
+target_compile_definitions(vsp PUBLIC SPDLOG_ACTIVE_LEVEL=0)
+
 if(MSVC)
  target_compile_options(vsp PRIVATE "/MP")
 endif()

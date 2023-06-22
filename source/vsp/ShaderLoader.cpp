@@ -1,8 +1,6 @@
 #include "ShaderLoader.h"
 #include <spdlog/spdlog.h>
 
-#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
-
 namespace vsp
 {
     std::vector<char> ShaderLoader::ReadShaderFile(const std::string& filename)
