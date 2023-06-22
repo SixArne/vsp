@@ -25,7 +25,7 @@ target_link_libraries(vsp PUBLIC
 )
 
 # Adding include directories for library users
-set(vsp_INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/include PARENT_SCOPE)
+set(vsp_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR} PARENT_SCOPE)
 
 
 ################################################################################################
