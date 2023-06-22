@@ -6,13 +6,16 @@ include(FetchContent)
 
 # Defining library files
 add_library(vsp STATIC
-    vsp/vsp.h
-    vsp/vsp.cpp
+    vsp/ShaderLoader.h
+    vsp/ShaderLoader.cpp
+    vsp/ShaderCompiler.h
+    vsp/ShaderCompiler.cpp
 )
 
 # Adding include directories
 target_include_directories(vsp PUBLIC
     Vulkan::Headers
+    ${SPDLOG_INCLUDE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
@@ -53,6 +56,22 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(glslang)
+
+# spdlog
+FetchContent_Declare(
+    spdlog
+    GIT_REPOSITORY https://github.com/SixArne/spdlog.git
+    GIT_TAG "v1.x"
+    DOWNLOAD_NO_PROGRESS ON
+)
+
+FetchContent_GetProperties(spdlog)
+if(NOT spdlog_POPULATED)
+    FetchContent_Populate(spdlog)
+    message(STATUS "Fetching spdlog from https://github.com/SixArne/spdlog.git on branch v1.x")
+    message(STATUS "Setting SPDLOG_INCLUDE_DIR to ${spdlog_SOURCE_DIR}")
+    set(SPDLOG_INCLUDE_DIR "${spdlog_SOURCE_DIR}")
+endif()
 
 find_package(Vulkan REQUIRED)
 

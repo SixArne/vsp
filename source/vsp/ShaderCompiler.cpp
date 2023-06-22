@@ -1,21 +1,11 @@
-#include "vsp.h"
+#include "ShaderCompiler.h"
+#include <spdlog/spdlog.h>
 
-#include <array>
-#include <filesystem>
-#include <future>
-#include <fstream>
-
-#pragma warning(push)
-#pragma warning(disable: 4458)
-#pragma warning(disable: 4457)
-#include <glslang/Public/ShaderLang.h>
-#include <SPIRV/GlslangToSpv.h>
-#pragma warning(pop)
-
+#define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 
 namespace vsp
 {
-	ShaderCompiler::ShaderCompiler()
+    ShaderCompiler::ShaderCompiler()
         : m_LUTExtensions_ShaderType
         {
 			{ ".vert", EShLanguage::EShLangVertex },
@@ -38,57 +28,25 @@ namespace vsp
         m_DefaultResource{ GetDefaultResource() }
 	{}
 
+    // Leave here to avoid RAII issues
     ShaderCompiler::~ShaderCompiler()
     {}
 
     bool ShaderCompiler::SPIR_V_CompileShaderByFile(ShaderFileByteCode& shaderFile)
     {
-        auto shaderCode = ShaderLoader::ReadShaderFileAsString(shaderFile.filename.string());
-        if (!shaderCode.empty())
+        bool hasCompiledShader{};
+
+        if (SPIR_V_CompileShader(shaderFile))
         {
-            glslang::InitializeProcess();
+            const std::string& parentFolder = shaderFile.filename.parent_path().string();
+            const std::string& fileName = shaderFile.filename.string();
+            const std::string& shaderType = GetShaderTypeName(shaderFile.shaderType);
 
-            glslang::TShader shader(shaderFile.shaderType);
-
-            std::array<const char*, 1> shaderStrings{};
-            shaderStrings[0] = shaderCode.c_str();
-
-            shader.setStrings(shaderStrings.data(), static_cast<int>(shaderStrings.size()));
-
-            int clientInputSemanticsVersion = 100;
-            glslang::EShTargetClientVersion vulkanClientVersion = glslang::EShTargetVulkan_1_3;
-            glslang::EShTargetLanguageVersion targetVersion = glslang::EShTargetSpv_1_6;
-            shader.setEnvTarget(glslang::EshTargetSpv, targetVersion);
-            shader.setEnvClient(glslang::EShClientVulkan, vulkanClientVersion);
-            shader.setEntryPoint("main");
-
-            const int defaultVersion = 100;
-
-            EShMessages messages = static_cast<EShMessages>(EShMsgSpvRules | EShMsgVulkanRules);
-
-            auto resource = GetDefaultResource();
-
-            if (!shader.parse(&resource, defaultVersion, false, messages)) {
-                puts(shader.getInfoLog());
-                puts(shader.getInfoDebugLog());
-                return false;  // shader failed to compile
-            }
-
-            glslang::TProgram program;
-            program.addShader(&shader);
-
-            if (!program.link(messages)) {
-                puts(program.getInfoLog());
-                puts(program.getInfoDebugLog());
-                return false;  // program failed to link
-            }
-
-            glslang::GlslangToSpv(*program.getIntermediate(shaderFile.shaderType), shaderFile.code);
-
-            return true;
+            const std::string& output = std::format("{}/{}{}.spv", parentFolder, fileName, shaderType);
+            hasCompiledShader = SPIR_V_WriteToFile(output, shaderFile.code);
         }
 
-        return false;
+        return hasCompiledShader;
     }
 
     TBuiltInResource ShaderCompiler::GetDefaultResource()
@@ -203,18 +161,19 @@ namespace vsp
 
     bool ShaderCompiler::SPIR_V_CompileShadersByDirectory(const std::string& directory)
     {
-        std::vector<ShaderFileByteCode> shaderFiles = FindAllShadersInDirectory(directory, 0);
+        std::vector<ShaderFileByteCode> shaderFiles = FindAllShadersInDirectory(directory);
 
         for (auto& shaderFile : shaderFiles)
         {
-            SPIR_V_CompileShaderByFile(shaderFile);
+            SPIR_V_CompileShader(shaderFile);
 
             // CompileShaderByFile should set new name and path
             auto output = std::format("{}/{}{}.spv", shaderFile.filename.parent_path().string(), shaderFile.filename.stem().string(), GetShaderTypeName(shaderFile.shaderType));
             SPIR_V_WriteToFile(output, shaderFile.code);
         }
 
-       /* std::vector<std::future<bool>> futures{};
+        // TODO: make sure multithreaded works
+        /* std::vector<std::future<bool>> futures{};
         for (auto& shaderFile : shaderFiles)
         {
             futures.emplace_back(std::async(std::launch::async, [&shaderFile]()
@@ -232,6 +191,56 @@ namespace vsp
         return true;
     }
 
+    bool ShaderCompiler::SPIR_V_CompileShader(ShaderFileByteCode& shaderFile)
+    {
+        auto shaderCode = ShaderLoader::ReadShaderFileAsString(shaderFile.filename.string());
+        if (!shaderCode.empty())
+        {
+            // Must initialize glslang before calling any glslang functions
+            glslang::InitializeProcess();
+            glslang::TShader shader(shaderFile.shaderType);
+
+            std::array<const char*, 1> shaderStrings{};
+            shaderStrings[0] = shaderCode.c_str();
+
+            shader.setStrings(shaderStrings.data(), static_cast<int>(shaderStrings.size()));
+
+            int clientInputSemanticsVersion = 100;
+            glslang::EShTargetClientVersion vulkanClientVersion = glslang::EShTargetVulkan_1_3;
+            glslang::EShTargetLanguageVersion targetVersion = glslang::EShTargetSpv_1_6;
+            shader.setEnvTarget(glslang::EshTargetSpv, targetVersion);
+            shader.setEnvClient(glslang::EShClientVulkan, vulkanClientVersion);
+            shader.setEntryPoint("main");
+
+            const int defaultVersion = 100;
+
+            EShMessages messages = static_cast<EShMessages>(EShMsgSpvRules | EShMsgVulkanRules);
+
+            auto resource = GetDefaultResource();
+
+            if (!shader.parse(&resource, defaultVersion, false, messages)) {
+                puts(shader.getInfoLog());
+                puts(shader.getInfoDebugLog());
+                return false;  // shader failed to compile
+            }
+
+            glslang::TProgram program;
+            program.addShader(&shader);
+
+            if (!program.link(messages)) {
+                puts(program.getInfoLog());
+                puts(program.getInfoDebugLog());
+                return false;  // program failed to link
+            }
+
+            glslang::GlslangToSpv(*program.getIntermediate(shaderFile.shaderType), shaderFile.code);
+
+            return true;
+        }
+
+        return false;
+    }
+
 	bool ShaderCompiler::SPIR_V_WriteToFile(const std::string& filename, SPIR_V& spirvcode)
 	{
         std::ofstream file(filename, std::ios::binary);
@@ -240,19 +249,17 @@ namespace vsp
             file.write(reinterpret_cast<const char*>(spirvcode.data()), spirvcode.size() * sizeof(uint32_t));
             file.close();
 
-            //L_DEBUG("SPIR-V file written as: {}", filename);
-
+            SPDLOG_DEBUG("SPIR-V file written as: {}", filename)
             return true;
         }
         else
         {
-            //L_ERROR("Failed to open and write SPIR-V file: {}", filename);
-
+            SPDLOG_ERROR("SPIR-V file written as: {}", filename)
             return false;
         }
 	}
 
-	std::vector<ShaderFileByteCode> ShaderCompiler::FindAllShadersInDirectory(const std::string& directory, int layers /*= 0*/)
+	std::vector<ShaderFileByteCode> ShaderCompiler::FindAllShadersInDirectory(const std::string& directory)
 	{
         std::vector<ShaderFileByteCode> shaderFiles{};
 
@@ -281,13 +288,13 @@ namespace vsp
 						}
                         else
                         {
-                            std::string fileformats
+                            [[maybe_unused]] std::string fileformats
                             {
                                 ".vert, .frag, .geom, .tesc, .tese, .comp"
                             };
 
-                            //L_ERROR("{} UNKNOWN SHADER FILE", entry.path())
-                            //L_ERROR("Only following extensions are valid {}", fileformats)
+                            SPDLOG_WARNING("{} UNKNOWN SHADER FILE", entry.path())
+                            SPDLOG_WARNING("Only following extensions are valid {}", fileformats)
                         }
 					}
 				}
@@ -299,6 +306,7 @@ namespace vsp
 
 	std::string ShaderCompiler::GetShaderTypeName(EShLanguage shaderType)
 	{
+        // Use lookup table to find file extension to use.
 		if (auto it = m_LUTShaderType_Name.find(shaderType); it != m_LUTShaderType_Name.end())
 		{
 			return it->second;
@@ -306,143 +314,4 @@ namespace vsp
 
         return std::string{};
 	}
-
-
-    std::vector<char> ShaderLoader::ReadShaderFile(const std::string& filename)
-    {
-        std::vector<char> output{};
-        if (std::ifstream file{filename, std::ios::binary})
-        {
-            output.assign(
-                std::istreambuf_iterator<char>(file),
-                std::istreambuf_iterator<char>()
-            );
-        }
-        else
-        {
-            //L_ERROR("Failed to read shader file: {}", filename);
-            return output;
-        }
-
-        //if (std::ifstream file{filename, std::ios::ate | std::ios::binary}; file.is_open())
-        //{
-        //    std::vector<char> buffer(fileSize);
-        //    // Assign or this syntax? test later
-        //    size_t fileSize = static_cast<size_t>(file.tellg());
-
-        //    file.seekg(0);
-        //    file.read(buffer.data(), fileSize);
-        //}
-
-        //L_ERROR("Failed to open shader file {}", filename);
-
-        return output;
-    }
-
-    std::string ShaderLoader::ReadShaderFileAsString(const std::string& filename)
-    {
-        std::string output{};
-        if (std::ifstream file{filename, std::ios::binary})
-        {
-            output.assign(
-                std::istreambuf_iterator<char>(file),
-                std::istreambuf_iterator<char>()
-            );
-        }
-        else
-        {
-            //L_ERROR("Failed to read shader file: {}", filename);
-            return output;
-        }
-
-        return output;
-    }
-
-    Shader ShaderLoader::SPIR_V_LoadShaderByFile(const std::string& filename)
-	{
-        // Shader data to return
-        Shader shader{};
-        
-        // Raw shader code
-        auto shaderFile = ReadShaderFile(filename);
-        
-        // We need to extract the name of the shader from the filename
-        std::filesystem::path pathToFile = filename;
-        std::filesystem::path shaderName = pathToFile.stem();
-
-        // Now we extract the type of shader by it's sub-extension
-        for (const auto& pair: m_LUTExtensions_ShaderType)
-        {
-            if (shaderName.string().find(pair.first) != std::string::npos)
-            {
-                shader.shaderType = pair.second;
-                break;
-            }
-        }
-
-        // Create the shader module
-        shader.shaderModule = CreateShaderModule(shaderFile);
-
-        return shader;
-	}
-
-    std::vector<Shader> ShaderLoader::SPIR_V_LoadShadersByDirectory(const std::string& directory)
-    {
-        std::vector<Shader> shaderFiles{};
-
-		if (std::filesystem::exists(directory))
-		{
-			for (const auto& entry : std::filesystem::recursive_directory_iterator(directory))
-			{
-				if (entry.is_regular_file())
-				{
-					if (auto extension = entry.path().extension(); !extension.empty())
-					{
-						auto stringExtension = extension.string();
-
-						if (stringExtension.find(".spv") != std::string::npos)
-						{
-                            // rework LoadShadersbyFile to use std::filesystem::path instead
-							Shader shader = SPIR_V_LoadShaderByFile(entry.path().string());
-                            shaderFiles.emplace_back(shader);
-						}
-					}
-				}
-			}
-		}
-
-        return shaderFiles;
-	}
-
-	VkShaderModule ShaderLoader::CreateShaderModule(const std::vector<char>& code)
-	{
-        VkShaderModuleCreateInfo createInfo{};
-        createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-        createInfo.codeSize = code.size();
-        createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
-
-        VkShaderModule shaderModule{};
-        if (vkCreateShaderModule(m_Device, &createInfo, nullptr, &shaderModule) != VK_SUCCESS)
-        {
-            //L_ERROR("Failed to create shader module");
-        }
-
-        return shaderModule;
-	}
-
-	ShaderLoader::ShaderLoader(const VkDevice device)
-        : m_Device{device},
-        m_LUTExtensions_ShaderType
-        {
-			{ ".vert", ShaderType::Vertex },
-            { ".frag", ShaderType::Fragment },
-            { ".geom", ShaderType::Geometry },
-            { ".tesc", ShaderType::TessellationControl },
-            { ".tese", ShaderType::TessellationEvaluation },
-            { ".comp", ShaderType::Compute }
-        }
-	{}
-
-	ShaderLoader::~ShaderLoader()
-	{}
 }
