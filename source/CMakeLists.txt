@@ -48,27 +48,6 @@ FetchContent_Declare(
         DOWNLOAD_NO_PROGRESS ON
 )
 
-FetchContent_GetProperties(glslang)
-if(NOT glslang_POPULATED)
-    FetchContent_Populate(glslang)
-endif()
-
-# Create a custom target that depends on the glslang target
-add_custom_target(run_python_command
-        DEPENDS ${glslang_POPULATED_NAME}
-)
-
-# Add a custom command to execute a Python command
-add_custom_command(
-        TARGET run_python_command
-        POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E chdir
-        ${glslang_SOURCE_DIR}
-        ${CMAKE_COMMAND} -E echo "Running your Python command in ${glslang_SOURCE_DIR}"
-        COMMAND ${CMAKE_COMMAND} -E python YourPythonScript.py  # Replace with your Python script
-        COMMENT "Executing Python command after populating glslang"
-)
-
 FetchContent_MakeAvailable(glslang)
 
 find_package(Vulkan REQUIRED)
