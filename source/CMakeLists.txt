@@ -63,7 +63,6 @@ target_include_directories(vsp PUBLIC
 target_link_libraries(vsp PUBLIC
         glslang
         SPIRV
-        OGLCompiler
         Vulkan::Vulkan
 )
 
