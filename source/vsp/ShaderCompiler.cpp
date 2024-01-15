@@ -1,5 +1,6 @@
 #include "ShaderCompiler.h"
-#include <spdlog/spdlog.h>
+
+#include "ShaderLoader.h"
 
 namespace vsp
 {
@@ -247,12 +248,10 @@ namespace vsp
             file.write(reinterpret_cast<const char*>(spirvcode.data()), spirvcode.size() * sizeof(uint32_t));
             file.close();
 
-            SPDLOG_DEBUG("SPIR-V file written as: {}", filename)
             return true;
         }
         else
         {
-            SPDLOG_ERROR("SPIR-V file written as: {}", filename)
             return false;
         }
 	}
@@ -291,8 +290,6 @@ namespace vsp
                                 ".vert, .frag, .geom, .tesc, .tese, .comp"
                             };
 
-                            SPDLOG_WARNING("{} UNKNOWN SHADER FILE", entry.path())
-                            SPDLOG_WARNING("Only following extensions are valid {}", fileformats)
                         }
 					}
 				}

@@ -12,23 +12,7 @@ add_library(vsp STATIC
     vsp/ShaderCompiler.cpp
 )
 
-# Adding include directories
-target_include_directories(vsp PUBLIC
-    Vulkan::Headers
-    ${SPDLOG_INCLUDE_DIR}/include
-    ${CMAKE_CURRENT_SOURCE_DIR}
-)
 
-# Adding dependencies
-target_link_libraries(vsp PUBLIC
-    glslang
-    SPIRV
-    OGLCompiler
-    Vulkan::Vulkan
-)
-
-# Adding include directories for library users
-set(vsp_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vsp")
 
 
 ################################################################################################
@@ -49,33 +33,63 @@ if(MSVC)
  target_compile_options(vsp PRIVATE "/MP")
 endif()
 
-# GLSLang
+
+
+
+
+
+
+
+# Fetch glslang repository
 FetchContent_Declare(
-    glslang
-    GIT_REPOSITORY https://github.com/KhronosGroup/glslang
-    GIT_TAG "main"
-    DOWNLOAD_NO_PROGRESS ON
+        glslang
+        GIT_REPOSITORY https://github.com/KhronosGroup/glslang
+        GIT_TAG "main"
+        DOWNLOAD_NO_PROGRESS ON
+)
+
+FetchContent_GetProperties(glslang)
+if(NOT glslang_POPULATED)
+    FetchContent_Populate(glslang)
+endif()
+
+# Create a custom target that depends on the glslang target
+add_custom_target(run_python_command
+        DEPENDS ${glslang_POPULATED_NAME}
+)
+
+# Add a custom command to execute a Python command
+add_custom_command(
+        TARGET run_python_command
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E chdir
+        ${glslang_SOURCE_DIR}
+        ${CMAKE_COMMAND} -E echo "Running your Python command in ${glslang_SOURCE_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E python YourPythonScript.py  # Replace with your Python script
+        COMMENT "Executing Python command after populating glslang"
 )
 
 FetchContent_MakeAvailable(glslang)
 
-# spdlog
-FetchContent_Declare(
-    spdlog
-    GIT_REPOSITORY https://github.com/SixArne/spdlog.git
-    GIT_TAG "v1.x"
-    DOWNLOAD_NO_PROGRESS ON
+find_package(Vulkan REQUIRED)
+
+# Adding include directories
+target_include_directories(vsp PUBLIC
+        Vulkan::Headers
+        ${glsl_INCLUDE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-FetchContent_GetProperties(spdlog)
-if(NOT spdlog_POPULATED)
-    FetchContent_Populate(spdlog)
-    message(STATUS "Fetching spdlog from https://github.com/SixArne/spdlog.git on branch v1.x")
-    message(STATUS "Setting SPDLOG_INCLUDE_DIR to ${spdlog_SOURCE_DIR}")
-    set(SPDLOG_INCLUDE_DIR "${spdlog_SOURCE_DIR}")
-endif()
+# Adding dependencies
+target_link_libraries(vsp PUBLIC
+        glslang
+        SPIRV
+        OGLCompiler
+        Vulkan::Vulkan
+)
 
-find_package(Vulkan REQUIRED)
+# Adding include directories for library users
+set(vsp_INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/vsp")
 
 # Export vsp_INCLUDE_DIR to parent scope
 set(vsp_INCLUDE_DIR "${vsp_INCLUDE_DIR}" CACHE INTERNAL "vsp include directory")

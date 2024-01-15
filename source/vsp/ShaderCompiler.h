@@ -11,7 +11,7 @@
 #pragma warning(disable: 4458)
 #pragma warning(disable: 4457)
 #include <glslang/Public/ShaderLang.h>
-#include <SPIRV/GlslangToSpv.h>
+#include <glslang/SPIRV/GlslangToSpv.h>
 #pragma warning(pop)
 
 namespace vsp

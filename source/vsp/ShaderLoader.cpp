@@ -1,5 +1,4 @@
 #include "ShaderLoader.h"
-#include <spdlog/spdlog.h>
 
 namespace vsp
 {
@@ -15,7 +14,6 @@ namespace vsp
         }
         else
         {
-            SPDLOG_ERROR("Failed to read shader file: {}", filename);
         }
 
         return output;
@@ -33,7 +31,6 @@ namespace vsp
         }
         else
         {
-            SPDLOG_ERROR("Failed to read shader file: {}", filename);
             return output;
         }
 
